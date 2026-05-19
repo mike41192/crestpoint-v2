@@ -16,78 +16,90 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit() {
-    setLoading(true)
-    setMessage("")
+  setLoading(true)
+  setMessage("Checking login...")
 
-    if (!email || !password) {
+  try {
+    const cleanEmail = email.trim().toLowerCase()
+
+    if (!cleanEmail || !password) {
       setMessage("Email and password are required.")
-      setLoading(false)
       return
     }
 
     if (password.length < 6) {
       setMessage("Password must be at least 6 characters.")
-      setLoading(false)
       return
     }
 
     if (mode === "signup") {
+      setMessage("Creating account...")
+
       const { error } = await supabase.auth.signUp({
-        email,
+        email: cleanEmail,
         password,
       })
-
-      setLoading(false)
 
       if (error) {
         setMessage(error.message)
         return
       }
 
-      setMessage("Account created. You can now log in.")
+      setMessage("Account created. Switch to login and sign in.")
       setMode("login")
       return
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
+    setMessage("Signing in...")
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
       password,
     })
 
-    setLoading(false)
-
     if (error) {
       setMessage(error.message)
       return
     }
 
-    router.push("/dashboard")
-  }
+    if (!data.session) {
+      setMessage("No session was created. Turn Confirm Email OFF in Supabase dev settings.")
+      return
+    }
 
-  async function handleMagicLink() {
+    setMessage("Login successful. Redirecting...")
+    window.location.href = "/dashboard"
+    
+  } catch (err) {
+    setMessage("Login failed. Check Supabase keys and browser console.")
+    console.error(err)
+  } finally {
+    setLoading(false)
+  }
+}
+  async function forgotPassword() {
+    const cleanEmail = email.trim().toLowerCase()
+
+    if (!cleanEmail) {
+      setMessage("Enter your email first.")
+      return
+    }
+
     setLoading(true)
     setMessage("")
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-      },
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}/reset-password`,
     })
 
-    setLoading(false)
-
     if (error) {
-      if (error.message.toLowerCase().includes("rate limit")) {
-        setMessage("Too many login emails sent. Please wait and try again.")
-        return
-      }
-
       setMessage(error.message)
+      setLoading(false)
       return
     }
 
-    setMessage("Magic link sent. Check your email.")
+    setMessage("Password reset email sent.")
+    setLoading(false)
   }
 
   return (
@@ -98,7 +110,7 @@ export default function LoginPage() {
         </h1>
 
         <p className="mt-2 text-sm text-slate-400">
-          Access your Crestpoint career command center.
+          Access your Crestpoint dashboard.
         </p>
 
         <div className="mt-8 space-y-4">
@@ -119,6 +131,7 @@ export default function LoginPage() {
           />
 
           <Button
+            type="button"
             className="w-full"
             onClick={handleSubmit}
             disabled={loading}
@@ -132,16 +145,17 @@ export default function LoginPage() {
 
           {mode === "login" && (
             <button
-              onClick={handleMagicLink}
-              disabled={loading || !email}
-              className="w-full rounded-xl border border-white/10 px-5 py-3 text-sm text-slate-300 transition hover:bg-white/10"
+              type="button"
+              onClick={forgotPassword}
+              disabled={loading}
+              className="w-full text-sm text-slate-400 hover:text-white"
             >
-              Send Magic Link Instead
+              Forgot password?
             </button>
           )}
 
           {message && (
-            <p className="text-sm text-slate-400">
+            <p className="rounded-xl bg-white/5 p-3 text-sm text-slate-300">
               {message}
             </p>
           )}
@@ -152,6 +166,7 @@ export default function LoginPage() {
             <>
               Don&apos;t have an account?{" "}
               <button
+                type="button"
                 onClick={() => {
                   setMode("signup")
                   setMessage("")
@@ -165,6 +180,7 @@ export default function LoginPage() {
             <>
               Already have an account?{" "}
               <button
+                type="button"
                 onClick={() => {
                   setMode("login")
                   setMessage("")
