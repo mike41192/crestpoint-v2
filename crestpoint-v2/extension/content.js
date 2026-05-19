@@ -1,4 +1,25 @@
-const CRESTPOINT_APP_URL = "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev"
+const CRESTPOINT_APP_URL =
+  "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev/"
+
+  function syncCrestpointUserId() {
+  const browserAPI = globalThis.browser || globalThis.chrome
+
+  const userIdElement = document.getElementById("crestpoint-user-id")
+
+  if (!userIdElement) return
+
+  const userId = userIdElement.innerText.trim()
+
+  if (!userId || userId === "Loading...") return
+
+  browserAPI.storage.local.set({
+    crestpointUserId: userId,
+  })
+
+  console.log("Crestpoint User ID synced:", userId)
+}
+
+setInterval(syncCrestpointUserId, 1000)
 
 function getText(selector) {
   return document.querySelector(selector)?.innerText?.trim() || ""
@@ -62,7 +83,7 @@ function detectGenericJob() {
 
   return {
     company: "",
-    role: title,
+    role: title || "Imported Job",
     location: "",
     description: document.body.innerText.slice(0, 5000),
     url: window.location.href,
@@ -113,7 +134,9 @@ function createOverlay() {
       const userId = result.crestpointUserId
 
       if (!userId) {
-        alert("Open the Crestpoint extension popup and enter your Supabase User ID first.")
+        alert(
+          "Open the Crestpoint extension popup and enter your Supabase User ID first."
+        )
         return
       }
 
@@ -136,11 +159,27 @@ function createOverlay() {
           }),
         })
 
-        const data = await res.json()
+        const text = await res.text()
+
+        let data = {}
+
+        try {
+          data = JSON.parse(text)
+        } catch {
+          button.innerText = "Save Failed"
+
+          alert(
+            "API returned non-JSON response. Your Crestpoint app URL or API route is wrong."
+          )
+
+          return
+        }
 
         if (!res.ok) {
           button.innerText = "Save Failed"
+
           alert(data.error || "Import failed.")
+
           return
         }
 
@@ -151,8 +190,12 @@ function createOverlay() {
         }, 2500)
       } catch (error) {
         console.error(error)
+
         button.innerText = "Save Failed"
-        alert("Could not save job.")
+
+        alert(
+          "Could not save job. Check that your Codespace URL is correct, your API route exists, and your Supabase service role key is set."
+        )
       }
     })
   })
@@ -167,6 +210,13 @@ let lastUrl = location.href
 setInterval(() => {
   if (location.href !== lastUrl) {
     lastUrl = location.href
+
+    const existing = document.getElementById("crestpoint-save-overlay")
+
+    if (existing) {
+      existing.remove()
+    }
+
     setTimeout(createOverlay, 1500)
   }
 }, 1000)
