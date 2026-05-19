@@ -5,12 +5,34 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      return NextResponse.json(
+        { error: "Missing NEXT_PUBLIC_SUPABASE_URL" },
+        { status: 500 }
+      )
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { error: "Missing SUPABASE_SERVICE_ROLE_KEY" },
+        { status: 500 }
+      )
+    }
+
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
     )
 
-    const { userId, company, role, jobUrl, jobDescription } = body
+    const {
+      userId,
+      company,
+      role,
+      location,
+      jobUrl,
+      jobDescription,
+      source,
+    } = body
 
     if (!userId) {
       return NextResponse.json({ error: "Missing userId" }, { status: 400 })
@@ -18,14 +40,15 @@ export async function POST(req: Request) {
 
     const { error } = await supabase.from("jobs").insert({
       user_id: userId,
-      company,
-      role,
-      job_url: jobUrl,
-      imported_from_url: jobUrl,
-      notes: jobDescription,
+      company: company || "",
+      role: role || "Imported Job",
+      location: location || "",
+      job_url: jobUrl || "",
+      imported_from_url: jobUrl || "",
+      notes: jobDescription || "",
       status: "saved",
       priority: "medium",
-      source: "chrome-extension",
+      source: source || "extension",
       updated_at: new Date().toISOString(),
     })
 

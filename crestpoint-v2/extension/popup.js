@@ -1,38 +1,42 @@
-const APP_URL = "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev/"
+const APP_URL = "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev"
 const browserAPI = globalThis.browser || globalThis.chrome
-
-document.getElementById("save").addEventListener("click", async () => {
-  const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true })
 
 browserAPI.storage.local.get(["crestpointUserId"], (result) => {
   if (result.crestpointUserId) {
-    document.getElementById("userId").value =
-      result.crestpointUserId
+    document.getElementById("userId").value = result.crestpointUserId
   }
 })
 
-browserAPI.tabs.query(
-  { active: true, currentWindow: true },
-  (tabs) => {
-    browserAPI.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      files: ["content.js"],
-    })
-  }
-)
+document.getElementById("saveUser").addEventListener("click", () => {
+  const userId = document.getElementById("userId").value.trim()
+
+  browserAPI.storage.local.set({
+    crestpointUserId: userId,
+  })
+
+  document.getElementById("status").innerText = "User ID saved."
+})
+
+document.getElementById("save").addEventListener("click", async () => {
+  const [tab] = await browserAPI.tabs.query({
+    active: true,
+    currentWindow: true,
+  })
+
+  const userId = document.getElementById("userId").value.trim()
+
+  browserAPI.storage.local.set({
+    crestpointUserId: userId,
+  })
 
   const payload = {
-    userId: document.getElementById("userId").value,
+    userId,
     company: document.getElementById("company").value,
     role: document.getElementById("role").value,
     jobDescription: document.getElementById("description").value,
     jobUrl: tab.url,
+    source: "manual-extension",
   }
-
-browserAPI.storage.local.set({
-  crestpointUserId: payload.userId,
-})
-
 
   const res = await fetch(`${APP_URL}/api/jobs/import`, {
     method: "POST",
