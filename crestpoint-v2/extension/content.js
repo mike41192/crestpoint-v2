@@ -1,7 +1,7 @@
 const CRESTPOINT_APP_URL =
-  "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev/"
+  "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev"
 
-  function syncCrestpointUserId() {
+function syncCrestpointUserId() {
   const browserAPI = globalThis.browser || globalThis.chrome
 
   const userIdElement = document.getElementById("crestpoint-user-id")
@@ -35,20 +35,27 @@ function detectLinkedInJob() {
       getText(".job-details-jobs-unified-top-card__company-name") ||
       getText(".jobs-unified-top-card__company-name") ||
       "",
+
     role:
       getText(".job-details-jobs-unified-top-card__job-title") ||
       getText(".jobs-unified-top-card__job-title") ||
       document.querySelector("h1")?.innerText?.trim() ||
       "",
+
     location:
-      getText(".job-details-jobs-unified-top-card__primary-description-container") ||
+      getText(
+        ".job-details-jobs-unified-top-card__primary-description-container"
+      ) ||
       getText(".jobs-unified-top-card__bullet") ||
       "",
+
     description:
       getText(".jobs-description-content__text") ||
       getText(".jobs-box__html-content") ||
       document.body.innerText.slice(0, 5000),
+
     url: window.location.href,
+
     source: "linkedin",
   }
 }
@@ -59,18 +66,23 @@ function detectIndeedJob() {
       getText('[data-testid="inlineHeader-companyName"]') ||
       getText(".jobsearch-CompanyInfoContainer a") ||
       "",
+
     role:
       getText('[data-testid="jobsearch-JobInfoHeader-title"]') ||
       document.querySelector("h1")?.innerText?.trim() ||
       "",
+
     location:
       getText('[data-testid="job-location"]') ||
       getText(".jobsearch-JobInfoHeader-subtitle") ||
       "",
+
     description:
       getText("#jobDescriptionText") ||
       document.body.innerText.slice(0, 5000),
+
     url: window.location.href,
+
     source: "indeed",
   }
 }
@@ -83,10 +95,15 @@ function detectGenericJob() {
 
   return {
     company: "",
+
     role: title || "Imported Job",
+
     location: "",
+
     description: document.body.innerText.slice(0, 5000),
+
     url: window.location.href,
+
     source: "generic",
   }
 }
@@ -109,7 +126,9 @@ function createOverlay() {
   if (document.getElementById("crestpoint-save-overlay")) return
 
   const button = document.createElement("button")
+
   button.id = "crestpoint-save-overlay"
+
   button.innerText = "Save to Crestpoint"
 
   button.style.position = "fixed"
@@ -119,85 +138,79 @@ function createOverlay() {
   button.style.padding = "14px 18px"
   button.style.borderRadius = "999px"
   button.style.border = "none"
-  button.style.background = "linear-gradient(90deg, #8b5cf6, #06b6d4)"
+  button.style.background =
+    "linear-gradient(90deg, #8b5cf6, #06b6d4)"
   button.style.color = "white"
   button.style.fontWeight = "700"
   button.style.fontSize = "14px"
   button.style.cursor = "pointer"
-  button.style.boxShadow = "0 10px 30px rgba(0,0,0,.35)"
+  button.style.boxShadow =
+    "0 10px 30px rgba(0,0,0,.35)"
 
   button.addEventListener("click", async () => {
-    const browserAPI = globalThis.browser || globalThis.chrome
+    const browserAPI =
+      globalThis.browser || globalThis.chrome
+
     const job = detectJobData()
 
-    browserAPI.storage.local.get(["crestpointUserId"], async (result) => {
-      const userId = result.crestpointUserId
+    browserAPI.storage.local.get(
+      ["crestpointUserId"],
+      async (result) => {
+        const userId = result.crestpointUserId
 
-      if (!userId) {
-        alert(
-          "Open the Crestpoint extension popup and enter your Supabase User ID first."
-        )
-        return
-      }
-
-      button.innerText = "Saving..."
-
-      try {
-        const res = await fetch(`${CRESTPOINT_APP_URL}/api/jobs/import`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId,
-            company: job.company,
-            role: job.role,
-            location: job.location,
-            jobUrl: job.url,
-            jobDescription: job.description,
-            source: job.source,
-          }),
-        })
-
-        const text = await res.text()
-
-        let data = {}
-
-        try {
-          data = JSON.parse(text)
-        } catch {
-          button.innerText = "Save Failed"
-
+        if (!userId) {
           alert(
-            "API returned non-JSON response. Your Crestpoint app URL or API route is wrong."
+            "Open Crestpoint extension popup first so your user ID can sync."
           )
 
           return
         }
 
-        if (!res.ok) {
-          button.innerText = "Save Failed"
+        button.innerText = "Saving..."
 
-          alert(data.error || "Import failed.")
+        chrome.runtime.sendMessage(
+          {
+            type: "CRESTPOINT_SAVE_JOB",
 
-          return
-        }
+            payload: {
+              userId,
 
-        button.innerText = "Saved ✓"
+              company: job.company,
 
-        setTimeout(() => {
-          button.innerText = "Save to Crestpoint"
-        }, 2500)
-      } catch (error) {
-        console.error(error)
+              role: job.role,
 
-        button.innerText = "Save Failed"
+              location: job.location,
 
-        alert(
-          "Could not save job. Check that your Codespace URL is correct, your API route exists, and your Supabase service role key is set."
+              jobUrl: job.url,
+
+              jobDescription: job.description,
+
+              source: job.source,
+            },
+          },
+
+          (response) => {
+            if (!response?.success) {
+              button.innerText = "Save Failed"
+
+              alert(
+                response?.error ||
+                  "Could not save job."
+              )
+
+              return
+            }
+
+            button.innerText = "Saved ✓"
+
+            setTimeout(() => {
+              button.innerText =
+                "Save to Crestpoint"
+            }, 2500)
+          }
         )
       }
-    })
+    )
   })
 
   document.body.appendChild(button)
@@ -211,7 +224,9 @@ setInterval(() => {
   if (location.href !== lastUrl) {
     lastUrl = location.href
 
-    const existing = document.getElementById("crestpoint-save-overlay")
+    const existing = document.getElementById(
+      "crestpoint-save-overlay"
+    )
 
     if (existing) {
       existing.remove()
