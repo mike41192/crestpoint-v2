@@ -16,6 +16,7 @@ import {
 import { supabase } from "@/lib/supabase/client"
 import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { exportApplicationPackage } from "@/lib/jobs/exportApplicationPackage"
 
 type Job = {
   id: string
@@ -47,9 +48,7 @@ function JobCard({
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: job.id,
-      data: {
-        job,
-      },
+      data: { job },
     })
 
   const style = transform
@@ -163,9 +162,7 @@ export default function JobsPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+      activationConstraint: { distance: 8 },
     })
   )
 
@@ -258,7 +255,7 @@ export default function JobsPage() {
       location,
       salary,
       job_url: jobUrl,
-      notes,
+      notes: jobDescription || notes,
       status: "saved",
       priority: "medium",
       match_score: matchScore,
@@ -294,12 +291,7 @@ export default function JobsPage() {
 
     setJobs((current) =>
       current.map((job) =>
-        job.id === id
-          ? {
-              ...job,
-              status: nextStatus,
-            }
-          : job
+        job.id === id ? { ...job, status: nextStatus } : job
       )
     )
 
@@ -340,6 +332,141 @@ export default function JobsPage() {
     }
 
     await loadJobs()
+    setMessage("Job deleted.")
+  }
+
+  async function tailorSelectedJob() {
+    if (!selectedJob) return
+
+    setLoading(true)
+    setMessage("Tailoring resume to selected job...")
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      setMessage("You must be logged in.")
+      setLoading(false)
+      return
+    }
+
+    try {
+      const res = await fetch("/api/jobs/tailor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          jobId: selectedJob.id,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setMessage(data.error || "Resume tailoring failed.")
+        return
+      }
+
+      setMessage("Tailored resume created and saved to resume versions.")
+      await loadJobs()
+    } catch (error) {
+      console.error(error)
+      setMessage("Resume tailoring failed.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function generateApplicationPackage() {
+    if (!selectedJob) return
+
+    setLoading(true)
+    setMessage("Generating application package...")
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      setMessage("You must be logged in.")
+      setLoading(false)
+      return
+    }
+
+    try {
+      const res = await fetch("/api/jobs/package", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          jobId: selectedJob.id,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setMessage(data.error || "Application package failed.")
+        return
+      }
+
+      setMessage(
+        "Application package created. Cover letter saved under Cover Letters."
+      )
+    } catch (error) {
+      console.error(error)
+      setMessage("Application package failed.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function exportSelectedPackage() {
+    if (!selectedJob) return
+
+    setLoading(true)
+    setMessage("Preparing export package...")
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      setMessage("You must be logged in.")
+      setLoading(false)
+      return
+    }
+
+    const { data: resume } = await supabase
+      .from("resumes")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const { data: coverLetter } = await supabase
+      .from("cover_letters")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("job_id", selectedJob.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    exportApplicationPackage({
+      job: selectedJob,
+      resume: resume || null,
+      coverLetter: coverLetter || null,
+    })
+
+    setMessage("Application package exported.")
+    setLoading(false)
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -372,7 +499,7 @@ export default function JobsPage() {
 
       <p className="mt-2 text-slate-400">
         Track applications with drag-and-drop Kanban, AI job matching,
-        recruiter-style scoring, and cleaner workflow management.
+        recruiter-style scoring, and application package exports.
       </p>
 
       <div className="mt-8 grid gap-6">
@@ -425,7 +552,7 @@ export default function JobsPage() {
 
           <textarea
             className="mt-4 min-h-32 w-full resize-y rounded-xl border border-white/10 bg-black/30 p-4 leading-7 outline-none"
-            placeholder="Notes"
+            placeholder="Private notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
@@ -496,9 +623,7 @@ export default function JobsPage() {
 
                 <p className="mt-1 text-slate-400">
                   {selectedJob.company || "Unknown company"}
-                  {selectedJob.location
-                    ? ` • ${selectedJob.location}`
-                    : ""}
+                  {selectedJob.location ? ` • ${selectedJob.location}` : ""}
                 </p>
 
                 {selectedJob.salary && (
@@ -508,17 +633,13 @@ export default function JobsPage() {
                 )}
               </div>
 
-              <Button onClick={() => setSelectedJob(null)}>
-                Close
-              </Button>
+              <Button onClick={() => setSelectedJob(null)}>Close</Button>
             </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
               <div className="space-y-4">
                 <div className="rounded-xl bg-white/5 p-4">
-                  <p className="text-sm text-slate-400">
-                    AI Match Score
-                  </p>
+                  <p className="text-sm text-slate-400">AI Match Score</p>
 
                   <h3 className="text-5xl font-bold">
                     {selectedJob.match_score ?? "--"}%
@@ -530,9 +651,7 @@ export default function JobsPage() {
 
                   <select
                     value={selectedJob.status || "saved"}
-                    onChange={(e) =>
-                      moveJob(selectedJob.id, e.target.value)
-                    }
+                    onChange={(e) => moveJob(selectedJob.id, e.target.value)}
                     className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm outline-none"
                   >
                     <option value="saved">Saved</option>
@@ -553,8 +672,36 @@ export default function JobsPage() {
                   </a>
                 )}
 
+                <div className="grid gap-3">
+                  <Button
+                    className="w-full"
+                    onClick={tailorSelectedJob}
+                    disabled={loading}
+                  >
+                    {loading ? "Tailoring..." : "Tailor Resume To This Job"}
+                  </Button>
+
+                  <Button
+                    className="w-full"
+                    onClick={generateApplicationPackage}
+                    disabled={loading}
+                  >
+                    {loading
+                      ? "Generating..."
+                      : "Generate Cover Letter + Package"}
+                  </Button>
+
+                  <Button
+                    className="w-full"
+                    onClick={exportSelectedPackage}
+                    disabled={loading}
+                  >
+                    {loading ? "Exporting..." : "Export Application Package PDF"}
+                  </Button>
+                </div>
+
                 <div>
-                  <h3 className="font-bold">Notes</h3>
+                  <h3 className="font-bold">Notes / Job Description</h3>
 
                   <p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-400">
                     {selectedJob.notes || "No notes saved."}
@@ -564,31 +711,23 @@ export default function JobsPage() {
 
               <div className="space-y-5">
                 <div>
-                  <h3 className="font-bold">
-                    Recruiter Feedback
-                  </h3>
+                  <h3 className="font-bold">Recruiter Feedback</h3>
 
                   <p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-400">
-                    {selectedJob.match_feedback ||
-                      "No feedback generated."}
+                    {selectedJob.match_feedback || "No feedback generated."}
                   </p>
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-red-300">
-                    Missing Skills
-                  </h3>
+                  <h3 className="font-bold text-red-300">Missing Skills</h3>
 
                   <p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-400">
-                    {selectedJob.missing_skills ||
-                      "No missing skills listed."}
+                    {selectedJob.missing_skills || "No missing skills listed."}
                   </p>
                 </div>
 
                 <div>
-                  <h3 className="font-bold text-cyan-300">
-                    Recommendations
-                  </h3>
+                  <h3 className="font-bold text-cyan-300">Recommendations</h3>
 
                   <p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-400">
                     {selectedJob.recommended_improvements ||

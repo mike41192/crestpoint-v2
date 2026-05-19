@@ -1,367 +1,135 @@
 import jsPDF from "jspdf"
+import { ResumeTemplate } from "./templates"
 
-import { ResumeTemplate } from "@/lib/resume/templates"
+type ResumeExportData = {
+  full_name?: string | null
+  target_role?: string | null
+  email?: string | null
+  phone?: string | null
+  location?: string | null
+  linkedin?: string | null
 
-import {
-  ResumeColorTheme,
-  ResumeFontTheme,
-} from "@/lib/resume/themes"
-
-type ExportResumeProps = {
-  fullName: string
-  targetRole: string
-  summary: string
-  experience: string
-  skills: string
+  summary?: string | null
+  experience?: string | null
+  education?: string | null
+  skills?: string | null
+  certifications?: string | null
 
   template?: ResumeTemplate
-
-  colorTheme?: ResumeColorTheme
-  fontTheme?: ResumeFontTheme
 }
 
-export function exportResumePdf({
-  fullName,
-  targetRole,
-  summary,
-  experience,
-  skills,
-
-  template = "classic",
-
-  colorTheme = "slate",
-  fontTheme = "modern",
-}: ExportResumeProps) {
+export function exportResumePdf(data: ResumeExportData) {
   const doc = new jsPDF("p", "mm", "letter")
 
-  const margin = 18
+  const margin = 16
+  const width = 178
 
-  const pageWidth =
-    doc.internal.pageSize.getWidth()
-
-  const pageHeight =
-    doc.internal.pageSize.getHeight()
-
-  const usableWidth =
-    pageWidth - margin * 2
-
-  let y = 20
-
-  const themeColors = {
-    slate: [51, 65, 85],
-    cyan: [6, 182, 212],
-    purple: [147, 51, 234],
-    emerald: [16, 185, 129],
-  }
-
-  const activeColor =
-    themeColors[colorTheme]
-
-  if (template === "premiumSidebar") {
-    doc.setFillColor(
-      activeColor[0],
-      activeColor[1],
-      activeColor[2]
-    )
-
-    doc.rect(
-      0,
-      0,
-      12,
-      pageHeight,
-      "F"
-    )
-  }
-
-  function checkPageSpace(
-    spaceNeeded = 12
-  ) {
-    if (
-      y + spaceNeeded >
-      pageHeight - margin
-    ) {
-      doc.addPage()
-
-      y = 20
-
-      if (
-        template ===
-        "premiumSidebar"
-      ) {
-        doc.setFillColor(
-          activeColor[0],
-          activeColor[1],
-          activeColor[2]
-        )
-
-        doc.rect(
-          0,
-          0,
-          12,
-          pageHeight,
-          "F"
-        )
-      }
-    }
-  }
+  let y = 24
 
   function divider() {
-    if (template === "modern") {
-      doc.setDrawColor(
-        activeColor[0],
-        activeColor[1],
-        activeColor[2]
-      )
-
-      doc.setLineWidth(0.6)
-
-      doc.line(
-        margin,
-        y,
-        pageWidth - margin,
-        y
-      )
-
-      y += 7
-    }
-
-    if (
-      template === "executive"
-    ) {
-      doc.setDrawColor(
-        activeColor[0],
-        activeColor[1],
-        activeColor[2]
-      )
-
-      doc.setLineWidth(1)
-
-      doc.line(
-        margin,
-        y,
-        pageWidth - margin,
-        y
-      )
-
-      y += 8
-    }
-
-    if (
-      template ===
-      "premiumSidebar"
-    ) {
-      doc.setDrawColor(
-        activeColor[0],
-        activeColor[1],
-        activeColor[2]
-      )
-
-      doc.setLineWidth(2)
-
-      doc.line(
-        margin,
-        y,
-        pageWidth - margin,
-        y
-      )
-
-      y += 8
-    }
-
-    if (
-      template ===
-      "premiumMinimal"
-    ) {
-      doc.setDrawColor(
-        180
-      )
-
-      doc.setLineWidth(0.3)
-
-      doc.line(
-        margin,
-        y,
-        pageWidth - margin,
-        y
-      )
-
-      y += 7
-    }
+    doc.setDrawColor(120)
+    doc.line(margin, y, 194, y)
+    y += 8
   }
 
-  function getFontFamily() {
-    if (
-      fontTheme === "classic"
-    ) {
-      return "times"
+  function section(title: string, content?: string | null) {
+    if (!content) return
+
+    if (y > 240) {
+      doc.addPage()
+      y = 20
     }
 
-    if (
-      fontTheme ===
-      "executive"
-    ) {
-      return "courier"
-    }
-
-    return "helvetica"
-  }
-
-  function addText(
-    text: string,
-    fontSize = 11,
-    bold = false
-  ) {
-    doc.setFont(
-      getFontFamily(),
-      bold
-        ? "bold"
-        : "normal"
-    )
-
-    doc.setFontSize(fontSize)
-
-    const lines =
-      doc.splitTextToSize(
-        text ||
-          "Not provided.",
-        usableWidth
-      )
-
-    lines.forEach(
-      (line: string) => {
-        checkPageSpace(8)
-
-        doc.text(
-          line,
-          margin,
-          y
-        )
-
-        y += 6
-      }
-    )
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(18)
+    doc.text(title.toUpperCase(), margin, y)
 
     y += 4
-  }
-
-  function addSection(
-    title: string,
-    content: string
-  ) {
-    checkPageSpace(18)
-
-    doc.setFont(
-      getFontFamily(),
-      "bold"
-    )
-
-    doc.setTextColor(
-      activeColor[0],
-      activeColor[1],
-      activeColor[2]
-    )
-
-    doc.setFontSize(
-      template ===
-        "executive"
-        ? 13
-        : 14
-    )
-
-    doc.text(
-      title.toUpperCase(),
-      margin,
-      y
-    )
-
-    y += 7
-
     divider()
 
-    doc.setTextColor(
-      0,
-      0,
-      0
-    )
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(11)
 
-    addText(
-      content,
-      11,
-      false
-    )
+    const lines = doc.splitTextToSize(content, width)
+
+    lines.forEach((line: string) => {
+      if (y > 265) {
+        doc.addPage()
+        y = 20
+      }
+
+      doc.text(line, margin, y)
+      y += 6
+    })
+
+    y += 8
   }
 
-  doc.setFont(
-    getFontFamily(),
-    "bold"
-  )
-
-  doc.setTextColor(
-    activeColor[0],
-    activeColor[1],
-    activeColor[2]
-  )
-
-  doc.setFontSize(
-    template ===
-      "executive"
-      ? 24
-      : 22
-  )
+  if (data.template === "executive") {
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(34)
+  } else {
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(28)
+  }
 
   doc.text(
-    fullName ||
-      "Your Name",
-    margin,
-    y
+    (data.full_name || "YOUR NAME").toUpperCase(),
+    105,
+    y,
+    {
+      align: "center",
+    }
   )
 
-  y += 9
+  y += 12
 
-  doc.setFont(
-    getFontFamily(),
-    "normal"
-  )
+  doc.setFont("helvetica", "bold")
 
-  doc.setTextColor(
-    80,
-    80,
-    80
-  )
-
-  doc.setFontSize(13)
+  if (data.template === "modern") {
+    doc.setFontSize(13)
+  } else {
+    doc.setFontSize(14)
+  }
 
   doc.text(
-    targetRole ||
-      "Target Role",
-    margin,
-    y
+    data.target_role || "",
+    105,
+    y,
+    {
+      align: "center",
+    }
   )
+
+  y += 10
+
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(11)
+
+  const contactLine = [
+    data.location,
+    data.email,
+    data.phone,
+    data.linkedin,
+  ]
+    .filter(Boolean)
+    .join(" | ")
+
+  doc.text(contactLine, 105, y, {
+    align: "center",
+  })
 
   y += 14
 
-  doc.setTextColor(
-    0,
-    0,
-    0
-  )
-
-  addSection(
-    "Professional Summary",
-    summary
-  )
-
-  addSection(
-    "Experience",
-    experience
-  )
-
-  addSection(
-    "Skills",
-    skills
-  )
+  section("Professional Summary", data.summary)
+  section("Work Experience", data.experience)
+  section("Education", data.education)
+  section("Skills", data.skills)
+  section("Certifications", data.certifications)
 
   doc.save(
-    `${fullName || "resume"}.pdf`
+    `${(data.full_name || "resume")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase()}-resume.pdf`
   )
 }

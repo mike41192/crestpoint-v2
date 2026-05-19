@@ -1,6 +1,3 @@
-const CRESTPOINT_APP_URL =
-  "https://glowing-spork-q7gx5jjrrp552w6v-3000.app.github.dev"
-
 function syncCrestpointUserId() {
   const browserAPI = globalThis.browser || globalThis.chrome
 
@@ -15,95 +12,152 @@ function syncCrestpointUserId() {
   browserAPI.storage.local.set({
     crestpointUserId: userId,
   })
-
-  console.log("Crestpoint User ID synced:", userId)
 }
 
 setInterval(syncCrestpointUserId, 1000)
 
+function cleanText(value) {
+  return (value || "")
+    .replace(/\s+/g, " ")
+    .replace(/Show more/gi, "")
+    .replace(/Show less/gi, "")
+    .replace(/Apply now/gi, "")
+    .replace(/Save job/gi, "")
+    .trim()
+}
+
 function getText(selector) {
-  return document.querySelector(selector)?.innerText?.trim() || ""
+  const el = document.querySelector(selector)
+  return cleanText(el?.innerText || el?.textContent || "")
 }
 
 function getMeta(selector) {
-  return document.querySelector(selector)?.content?.trim() || ""
+  return cleanText(document.querySelector(selector)?.content || "")
 }
 
-function detectLinkedInJob() {
-  return {
-    company:
-      getText(".job-details-jobs-unified-top-card__company-name") ||
-      getText(".jobs-unified-top-card__company-name") ||
-      "",
+function firstValidText(selectors) {
+  for (const selector of selectors) {
+    const value = getText(selector)
 
-    role:
-      getText(".job-details-jobs-unified-top-card__job-title") ||
-      getText(".jobs-unified-top-card__job-title") ||
-      document.querySelector("h1")?.innerText?.trim() ||
-      "",
-
-    location:
-      getText(
-        ".job-details-jobs-unified-top-card__primary-description-container"
-      ) ||
-      getText(".jobs-unified-top-card__bullet") ||
-      "",
-
-    description:
-      getText(".jobs-description-content__text") ||
-      getText(".jobs-box__html-content") ||
-      document.body.innerText.slice(0, 5000),
-
-    url: window.location.href,
-
-    source: "linkedin",
+    if (value && value.length > 1) {
+      return value
+    }
   }
+
+  return ""
+}
+
+function extractIndeedCompanyFromSubtitle() {
+  const subtitle =
+    getText('[data-testid="jobsearch-JobInfoHeader-companyName"]') ||
+    getText('[data-testid="inlineHeader-companyName"]') ||
+    getText(".jobsearch-CompanyInfoContainer") ||
+    ""
+
+  return subtitle
+    .split("\n")[0]
+    .split(" - ")[0]
+    .split("•")[0]
+    .trim()
+}
+
+function extractIndeedLocationFromSubtitle() {
+  return (
+    getText('[data-testid="job-location"]') ||
+    getText('[data-testid="jobsearch-JobInfoHeader-companyLocation"]') ||
+    ""
+  )
 }
 
 function detectIndeedJob() {
+  const role = firstValidText([
+    '[data-testid="jobsearch-JobInfoHeader-title"]',
+    "h1.jobsearch-JobInfoHeader-title",
+    "h1",
+  ])
+
+  const company =
+    extractIndeedCompanyFromSubtitle() ||
+    firstValidText([
+      '[data-company-name="true"]',
+      ".jobsearch-CompanyInfoContainer a",
+      ".jobsearch-InlineCompanyRating div",
+    ])
+
+  const location = extractIndeedLocationFromSubtitle()
+
+  const description = firstValidText([
+    "#jobDescriptionText",
+    '[data-testid="jobDescriptionText"]',
+    ".jobsearch-jobDescriptionText",
+  ])
+
   return {
-    company:
-      getText('[data-testid="inlineHeader-companyName"]') ||
-      getText(".jobsearch-CompanyInfoContainer a") ||
-      "",
-
-    role:
-      getText('[data-testid="jobsearch-JobInfoHeader-title"]') ||
-      document.querySelector("h1")?.innerText?.trim() ||
-      "",
-
-    location:
-      getText('[data-testid="job-location"]') ||
-      getText(".jobsearch-JobInfoHeader-subtitle") ||
-      "",
-
-    description:
-      getText("#jobDescriptionText") ||
-      document.body.innerText.slice(0, 5000),
-
+    company,
+    role,
+    location,
+    description,
     url: window.location.href,
-
     source: "indeed",
   }
 }
 
+function detectLinkedInJob() {
+  const role = firstValidText([
+    ".job-details-jobs-unified-top-card__job-title",
+    ".jobs-unified-top-card__job-title",
+    ".top-card-layout__title",
+    "h1",
+  ])
+
+  const company = firstValidText([
+    ".job-details-jobs-unified-top-card__company-name",
+    ".jobs-unified-top-card__company-name",
+    ".topcard__org-name-link",
+    ".top-card-layout__card .topcard__flavor",
+  ])
+
+  const location = firstValidText([
+    ".job-details-jobs-unified-top-card__primary-description-container",
+    ".jobs-unified-top-card__bullet",
+    ".topcard__flavor--bullet",
+  ])
+
+  const description = firstValidText([
+    ".jobs-description-content__text",
+    ".jobs-box__html-content",
+    ".description__text",
+  ])
+
+  return {
+    company,
+    role,
+    location,
+    description,
+    url: window.location.href,
+    source: "linkedin",
+  }
+}
+
 function detectGenericJob() {
-  const title =
-    document.querySelector("h1")?.innerText?.trim() ||
+  const role =
+    firstValidText(["h1"]) ||
     getMeta('meta[property="og:title"]') ||
     document.title
 
+  const description =
+    firstValidText([
+      "main",
+      "article",
+      '[role="main"]',
+    ]) || ""
+
   return {
     company: "",
-
-    role: title || "Imported Job",
-
+    role: cleanText(role) || "Imported Job",
     location: "",
-
-    description: document.body.innerText.slice(0, 5000),
-
+    description: cleanText(description).slice(0, 4000),
     url: window.location.href,
-
     source: "generic",
   }
 }
@@ -111,12 +165,12 @@ function detectGenericJob() {
 function detectJobData() {
   const host = window.location.hostname.toLowerCase()
 
-  if (host.includes("linkedin.com")) {
-    return detectLinkedInJob()
-  }
-
   if (host.includes("indeed.com")) {
     return detectIndeedJob()
+  }
+
+  if (host.includes("linkedin.com")) {
+    return detectLinkedInJob()
   }
 
   return detectGenericJob()
@@ -128,7 +182,6 @@ function createOverlay() {
   const button = document.createElement("button")
 
   button.id = "crestpoint-save-overlay"
-
   button.innerText = "Save to Crestpoint"
 
   button.style.position = "fixed"
@@ -138,79 +191,62 @@ function createOverlay() {
   button.style.padding = "14px 18px"
   button.style.borderRadius = "999px"
   button.style.border = "none"
-  button.style.background =
-    "linear-gradient(90deg, #8b5cf6, #06b6d4)"
+  button.style.background = "linear-gradient(90deg, #8b5cf6, #06b6d4)"
   button.style.color = "white"
   button.style.fontWeight = "700"
   button.style.fontSize = "14px"
   button.style.cursor = "pointer"
-  button.style.boxShadow =
-    "0 10px 30px rgba(0,0,0,.35)"
+  button.style.boxShadow = "0 10px 30px rgba(0,0,0,.35)"
 
   button.addEventListener("click", async () => {
-    const browserAPI =
-      globalThis.browser || globalThis.chrome
-
+    const browserAPI = globalThis.browser || globalThis.chrome
     const job = detectJobData()
 
-    browserAPI.storage.local.get(
-      ["crestpointUserId"],
-      async (result) => {
-        const userId = result.crestpointUserId
+    if (!job.description || job.description.length < 80) {
+      alert(
+        "Could not detect a clean job description. Open the full job details page and try again."
+      )
+      return
+    }
 
-        if (!userId) {
-          alert(
-            "Open Crestpoint extension popup first so your user ID can sync."
-          )
+    browserAPI.storage.local.get(["crestpointUserId"], async (result) => {
+      const userId = result.crestpointUserId
 
-          return
-        }
-
-        button.innerText = "Saving..."
-
-        chrome.runtime.sendMessage(
-          {
-            type: "CRESTPOINT_SAVE_JOB",
-
-            payload: {
-              userId,
-
-              company: job.company,
-
-              role: job.role,
-
-              location: job.location,
-
-              jobUrl: job.url,
-
-              jobDescription: job.description,
-
-              source: job.source,
-            },
-          },
-
-          (response) => {
-            if (!response?.success) {
-              button.innerText = "Save Failed"
-
-              alert(
-                response?.error ||
-                  "Could not save job."
-              )
-
-              return
-            }
-
-            button.innerText = "Saved ✓"
-
-            setTimeout(() => {
-              button.innerText =
-                "Save to Crestpoint"
-            }, 2500)
-          }
-        )
+      if (!userId) {
+        alert("Open Crestpoint extension popup first so your user ID can sync.")
+        return
       }
-    )
+
+      button.innerText = "Saving..."
+
+      chrome.runtime.sendMessage(
+        {
+          type: "CRESTPOINT_SAVE_JOB",
+          payload: {
+            userId,
+            company: job.company,
+            role: job.role,
+            location: job.location,
+            jobUrl: job.url,
+            jobDescription: job.description,
+            source: job.source,
+          },
+        },
+        (response) => {
+          if (!response?.success) {
+            button.innerText = "Save Failed"
+            alert(response?.error || "Could not save job.")
+            return
+          }
+
+          button.innerText = "Saved ✓"
+
+          setTimeout(() => {
+            button.innerText = "Save to Crestpoint"
+          }, 2500)
+        }
+      )
+    })
   })
 
   document.body.appendChild(button)
@@ -224,9 +260,7 @@ setInterval(() => {
   if (location.href !== lastUrl) {
     lastUrl = location.href
 
-    const existing = document.getElementById(
-      "crestpoint-save-overlay"
-    )
+    const existing = document.getElementById("crestpoint-save-overlay")
 
     if (existing) {
       existing.remove()
